@@ -1,258 +1,356 @@
-import React, { useState } from 'react';
-
-export default function App() {
-  const [basePrice, setBasePrice] = useState('');
-  const [costPrice, setCostPrice] = useState('');
-  const [deliveryCost, setDeliveryCost] = useState('');
-  const [overheadCost, setOverheadCost] = useState('');
-  const [margin, setMargin] = useState('');
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-
-  const calculateDiscount = () => {
-    setError('');
-    setResult(null);
-
-    const base = parseFloat(basePrice);
-    const cost = parseFloat(costPrice);
-    const delivery = deliveryCost === '' ? 0 : parseFloat(deliveryCost);
-    const overhead = overheadCost === '' ? 0 : parseFloat(overheadCost);
-    const marg = parseFloat(margin);
-
-    // Валидация ввода
-    if (isNaN(base) || isNaN(cost) || isNaN(delivery) || isNaN(overhead) || isNaN(marg)) {
-      setError('пожалуйста, заполните все поля числовыми значениями.');
-      return;
-    }
-
-    if (base <= 0 || cost <= 0 || delivery < 0 || overhead < 0) {
-      setError('цены должны быть больше нуля, а доставка и накладные расходы не могут быть отрицательными.');
-      return;
-    }
-
-    if (marg >= 100 || marg < 0) {
-      setError('маржа должна быть от 0 до 99%.');
-      return;
-    }
-
-    const totalCost = cost + delivery + overhead;
-
-    if (totalCost > base) {
-      setError('ошибка: общие затраты (себестоимость + доставка + накладные расходы) не могут быть выше РРЦ.');
-      return;
-    }
-
-    // Расчет минимально допустимой цены на основе требуемой маржи
-    // Формула: Минимальная цена = Общие затраты / (1 - (Маржа / 100))
-    const minPrice = totalCost / (1 - marg / 100);
-
-    // Расчет максимально возможной скидки
-    // Формула: Скидка % = ((РРЦ - Минимальная цена) / РРЦ) * 100
-    let maxDiscount = ((base - minPrice) / base) * 100;
-
-    if (base < minPrice) {
-      // РРЦ уже не обеспечивает нужную маржу
-      setResult({
-        minPrice: minPrice.toFixed(2),
-        maxDiscount: 0,
-        warning: true,
-        message: 'внимание: текущая РРЦ слишком низкая! она не обеспечивает минимально допустимую маржу.',
-      });
-    } else {
-      // Успешный расчет
-      setResult({
-        minPrice: minPrice.toFixed(2),
-        maxDiscount: maxDiscount.toFixed(2),
-        warning: false,
-        message: 'статус: расчет выполнен успешно.',
-      });
-    }
-  };
-
-  const handleReset = () => {
-    setBasePrice('');
-    setCostPrice('');
-    setDeliveryCost('');
-    setOverheadCost('');
-    setMargin('');
-    setResult(null);
-    setError('');
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-gray-100">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор максимальной скидки</title>
+    
+    <!-- Подключение Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Настройка пользовательских цветов Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        green: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            300: '#86efac',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Подключение шрифтов. Используем системные для скорости, но задаем стилистику */
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f0fdf4; /* Светло-зеленый фон страницы */
+        }
         
-        {/* Шапка */}
-        <div className="bg-blue-600 p-6 text-white text-center">
-          <div className="flex justify-center mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold tracking-wide">Калькулятор скидки</h2>
-          <p className="text-blue-100 text-sm mt-1">Оценка минимальной цены и скидки клиента</p>
+        /* Специфичный класс для заголовков и важных элементов - жирный курсив */
+        .bold-italic {
+            font-weight: 700;
+            font-style: italic;
+        }
+
+        /* Плавное появление результатов */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-fade-in-up {
+            animation: fadeInUp 0.4s ease-out forwards;
+        }
+        
+        /* Скрываем элемент по умолчанию */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 text-gray-800">
+
+    <div class="bg-[#fafffa] rounded-[24px] shadow-2xl w-full max-w-md overflow-hidden border border-green-100">
+        
+        <!-- Шапка -->
+        <div class="bg-[#5c905c] p-6 text-white text-center rounded-t-[24px]">
+            <div class="flex justify-center mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h2 class="text-3xl bold-italic tracking-wide">Калькулятор скидки</h2>
+            <p class="text-green-100 text-sm mt-1 bold-italic">Оценка минимальной цены и скидки клиента</p>
         </div>
 
-        {/* Форма ввода */}
-        <div className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              РРЦ (₽)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={basePrice}
-              onChange={(e) => setBasePrice(e.target.value)}
-              placeholder="например: 15000"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Себестоимость (₽)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={costPrice}
-              onChange={(e) => setCostPrice(e.target.value)}
-              placeholder="например: 9500"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Стоимость доставки (₽)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={deliveryCost}
-              onChange={(e) => setDeliveryCost(e.target.value)}
-              placeholder="например: 500"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Дополнительные расходы (₽)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={overheadCost}
-              onChange={(e) => setOverheadCost(e.target.value)}
-              placeholder="например: 300"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Мин. допустимая маржа (%)
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                min="0"
-                max="99"
-                step="0.1"
-                value={margin}
-                onChange={(e) => setMargin(e.target.value)}
-                placeholder="например: 25"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white pr-10"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">%</span>
+        <!-- Форма ввода -->
+        <div class="p-6 space-y-5 bg-[#fafffa]">
+            
+            <div class="flex items-center justify-between gap-4">
+               <label for="basePrice" class="block text-sm text-[#4a6b4a] bold-italic whitespace-nowrap">
+                  РРЦ (₽)
+               </label>
+               <input
+                  type="number"
+                  id="basePrice"
+                  min="0"
+                  step="0.01"
+                  placeholder="например: 15000"
+                  class="w-2/3 px-4 py-2 rounded-full border border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-colors bg-white text-gray-700 italic"
+               >
             </div>
-          </div>
 
-          {/* Кнопки управления */}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={calculateDiscount}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm hover:shadow-md transition-all active:scale-95"
-            >
-              Рассчитать
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold rounded-lg transition-colors active:scale-95"
-              title="Очистить форму"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
+            <div class="flex items-center justify-between gap-4">
+               <label for="costPrice" class="block text-sm text-[#4a6b4a] bold-italic whitespace-nowrap">
+                  Себестоимость (₽)
+               </label>
+               <input
+                  type="number"
+                  id="costPrice"
+                  min="0"
+                  step="0.01"
+                  placeholder="например: 9500"
+                  class="w-2/3 px-4 py-2 rounded-full border border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-colors bg-white text-gray-700 italic"
+               >
+            </div>
+
+            <div class="flex items-center justify-between gap-4">
+               <label for="deliveryCost" class="block text-sm text-[#4a6b4a] bold-italic whitespace-nowrap">
+                  Доставка (₽)
+               </label>
+               <input
+                  type="number"
+                  id="deliveryCost"
+                  min="0"
+                  step="0.01"
+                  placeholder="например: 500"
+                  class="w-2/3 px-4 py-2 rounded-full border border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-colors bg-white text-gray-700 italic"
+               >
+            </div>
+
+            <div class="flex items-center justify-between gap-4">
+               <label for="overheadCost" class="block text-sm text-[#4a6b4a] bold-italic whitespace-nowrap">
+                  Доп. расходы (₽)
+               </label>
+               <input
+                  type="number"
+                  id="overheadCost"
+                  min="0"
+                  step="0.01"
+                  placeholder="например: 300"
+                  class="w-2/3 px-4 py-2 rounded-full border border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-colors bg-white text-gray-700 italic"
+               >
+            </div>
+
+            <div class="flex items-center justify-between gap-4">
+               <label for="margin" class="block text-sm text-[#4a6b4a] bold-italic whitespace-nowrap">
+                  Мин. маржа (%)
+               </label>
+               <div class="relative w-2/3">
+                  <input
+                     type="number"
+                     id="margin"
+                     min="0"
+                     max="99"
+                     step="0.1"
+                     placeholder="например: 25"
+                     class="w-full px-4 py-2 rounded-full border border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-colors bg-white text-gray-700 italic pr-8"
+                  >
+               </div>
+            </div>
+
+            <!-- Кнопки управления (в стиле макета) -->
+            <div class="flex justify-between items-center pt-4">
+                <button
+                    onclick="handleReset()"
+                    class="px-6 py-2 bg-[#e0ebd8] hover:bg-[#d0dfc5] text-[#4a6b4a] bold-italic rounded-full transition-colors active:scale-95 shadow-sm text-sm"
+                    title="Очистить форму"
+                >
+                    Очистить форм
+                </button>
+                <button
+                    onclick="calculateDiscount()"
+                    class="bg-[#8eb88e] hover:bg-[#7da77d] text-white bold-italic py-2 px-8 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95 text-lg"
+                >
+                    Рассчитать
+                </button>
+            </div>
         </div>
 
-        {/* Вывод ошибки валидации */}
-        {error && (
-          <div className="px-6 pb-6">
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm flex items-start border border-red-100">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <span>{error}</span>
+        <!-- Вывод ошибки валидации -->
+        <div id="errorContainer" class="px-6 pb-4 hidden">
+            <div class="bg-red-50 text-red-600 p-4 rounded-[16px] text-sm flex items-start border border-red-200 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                <span id="errorMessage" class="italic"></span>
             </div>
-          </div>
-        )}
+        </div>
 
-        {/* Результаты расчета */}
-        {result && !error && (
-          <div className="px-6 pb-6 animate-fade-in-up">
-            <div className={`rounded-xl p-5 border ${result.warning ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-              
-              {result.warning && (
-                <div className="flex items-start mb-4 text-amber-700 bg-amber-100/50 p-3 rounded-lg text-sm font-medium">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span>{result.message}</span>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 mb-1">
-                    Минимально допустимая цена:
-                  </p>
-                  <p className={`text-2xl font-bold ${result.warning ? 'text-amber-700' : 'text-gray-800'}`}>
-                    {result.minPrice} ₽
-                  </p>
+        <!-- Результаты расчета -->
+        <div id="resultContainer" class="px-6 pb-6 hidden animate-fade-in-up">
+            <div id="resultBox" class="rounded-[20px] p-5 border bg-[#f0f8f0] border-green-200 shadow-sm relative overflow-hidden">
+                
+                <!-- Сообщение-предупреждение (отображается только при ошибке маржи) -->
+                <div id="warningMessage" class="hidden mb-4 text-amber-700 bg-amber-50 p-3 rounded-lg text-sm font-medium border border-amber-200 italic">
+                    Внимание: текущая РРЦ слишком низкая! Она не обеспечивает минимально допустимую маржу.
                 </div>
 
-                <div className="pt-4 border-t border-gray-200/60">
-                  <p className="text-sm font-medium text-gray-500 mb-1">
-                    Максимально возможная скидка:
-                  </p>
-                  <div className="flex items-end gap-2">
-                    <p className={`text-3xl font-extrabold ${result.warning ? 'text-gray-400' : 'text-green-600'}`}>
-                      {result.maxDiscount}%
-                    </p>
-                    {!result.warning && (
-                      <span className="text-sm font-medium text-green-600 mb-1.5 bg-green-100 px-2 py-0.5 rounded">
-                        Доступно
-                      </span>
-                    )}
-                  </div>
+                <div class="space-y-4">
+                    
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-lg text-[#4a6b4a] bold-italic mb-1 leading-tight">
+                                Максимально возможная<br>скидка
+                            </p>
+                            <div class="flex items-baseline gap-2 mt-2">
+                                <span id="resMaxDiscount" class="text-4xl text-[#3b5e3b] font-black italic">0</span>
+                                <span class="text-2xl text-[#3b5e3b] font-black italic">%</span>
+                            </div>
+                            <p id="resMinPriceInfo" class="text-sm text-gray-500 mt-2 italic">Мин. цена: <span id="resMinPrice" class="font-bold">0</span> ₽</p>
+                        </div>
+                        
+                        <div class="flex flex-col items-end gap-2">
+                             <div class="bg-[#dcfce7] text-[#166534] px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider">
+                                Скидка
+                            </div>
+                            <div id="statusBadge" class="bg-[#dcfce7] text-[#166534] px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider">
+                                Доступно
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-              
+                
             </div>
-          </div>
-        )}
+        </div>
 
-      </div>
     </div>
-  );
-}
+
+    <script>
+        // Получение ссылок на DOM элементы
+        const elBasePrice = document.getElementById('basePrice');
+        const elCostPrice = document.getElementById('costPrice');
+        const elDeliveryCost = document.getElementById('deliveryCost');
+        const elOverheadCost = document.getElementById('overheadCost');
+        const elMargin = document.getElementById('margin');
+        
+        const elErrorContainer = document.getElementById('errorContainer');
+        const elErrorMessage = document.getElementById('errorMessage');
+        
+        const elResultContainer = document.getElementById('resultContainer');
+        const elResultBox = document.getElementById('resultBox');
+        const elWarningMessage = document.getElementById('warningMessage');
+        const elResMinPrice = document.getElementById('resMinPrice');
+        const elResMaxDiscount = document.getElementById('resMaxDiscount');
+        const elStatusBadge = document.getElementById('statusBadge');
+        const elResMinPriceInfo = document.getElementById('resMinPriceInfo');
+
+        // Функция для отображения ошибки
+        function showError(message) {
+            elResultContainer.classList.add('hidden');
+            elErrorMessage.textContent = message;
+            elErrorContainer.classList.remove('hidden');
+        }
+
+        // Главная функция расчета
+        function calculateDiscount() {
+            // Сброс видимости контейнеров перед новым расчетом
+            elErrorContainer.classList.add('hidden');
+            elResultContainer.classList.add('hidden');
+            
+            // Получение и парсинг значений
+            const base = parseFloat(elBasePrice.value);
+            const cost = parseFloat(elCostPrice.value);
+            const delivery = elDeliveryCost.value === '' ? 0 : parseFloat(elDeliveryCost.value);
+            const overhead = elOverheadCost.value === '' ? 0 : parseFloat(elOverheadCost.value);
+            const marg = parseFloat(elMargin.value);
+
+            // Валидация ввода
+            if (isNaN(base) || isNaN(cost) || isNaN(delivery) || isNaN(overhead) || isNaN(marg)) {
+                showError('пожалуйста, заполните все обязательные поля (РРЦ, себестоимость, маржа).');
+                return;
+            }
+
+            if (base <= 0 || cost <= 0 || delivery < 0 || overhead < 0) {
+                showError('цены должны быть больше нуля, а дополнительные расходы не могут быть отрицательными.');
+                return;
+            }
+
+            if (marg >= 100 || marg < 0) {
+                showError('маржа должна быть от 0 до 99%.');
+                return;
+            }
+
+            const totalCost = cost + delivery + overhead;
+
+            if (totalCost > base) {
+                showError('ошибка: общие затраты (себестоимость + доставка + накладные расходы) не могут быть выше РРЦ.');
+                return;
+            }
+
+            // Расчет минимально допустимой цены
+            // Формула: Минимальная цена = Общие затраты / (1 - (Маржа / 100))
+            const minPrice = totalCost / (1 - marg / 100);
+
+            // Расчет максимально возможной скидки
+            // Формула: Скидка % = ((РРЦ - Минимальная цена) / РРЦ) * 100
+            let maxDiscount = ((base - minPrice) / base) * 100;
+
+            // Обновление DOM элементов результатами
+            elResMinPrice.textContent = minPrice.toFixed(2);
+            
+            // Принудительный перезапуск анимации
+            elResultContainer.classList.remove('animate-fade-in-up');
+            void elResultContainer.offsetWidth; // trigger reflow
+            
+            if (base < minPrice) {
+                // РРЦ слишком низкая
+                elResMaxDiscount.textContent = '0.00';
+                
+                // Стилизация под предупреждение
+                elResultBox.className = 'rounded-[20px] p-5 border bg-amber-50 border-amber-200 shadow-sm relative overflow-hidden';
+                elResMaxDiscount.className = 'text-4xl text-amber-700 font-black italic opacity-50 line-through';
+                elWarningMessage.classList.remove('hidden');
+                elStatusBadge.classList.add('hidden');
+                
+            } else {
+                // Успешный расчет
+                elResMaxDiscount.textContent = maxDiscount.toFixed(2);
+                
+                // Стилизация под успех
+                elResultBox.className = 'rounded-[20px] p-5 border bg-[#f0f8f0] border-green-200 shadow-sm relative overflow-hidden';
+                elResMaxDiscount.className = 'text-5xl text-[#3b5e3b] font-black italic';
+                elWarningMessage.classList.add('hidden');
+                
+                elStatusBadge.textContent = 'Доступно';
+                elStatusBadge.className = 'bg-[#dcfce7] text-[#166534] px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider';
+                elStatusBadge.classList.remove('hidden');
+            }
+
+            // Показываем блок с результатами
+            elResultContainer.classList.remove('hidden');
+            elResultContainer.classList.add('animate-fade-in-up');
+        }
+
+        // Функция сброса формы
+        function handleReset() {
+            elBasePrice.value = '';
+            elCostPrice.value = '';
+            elDeliveryCost.value = '';
+            elOverheadCost.value = '';
+            elMargin.value = '';
+            
+            elErrorContainer.classList.add('hidden');
+            elResultContainer.classList.add('hidden');
+        }
+        
+        // Поддержка нажатия Enter для расчета
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    calculateDiscount();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
